@@ -1,30 +1,16 @@
-      - name: Install Ngrok
+name: LQDOSE
+on:
+  workflow_dispatch:
+
+jobs:
+  secure-rdp:
+    runs-on: windows-latest
+    timeout-minutes: 3600
+    steps:
+      - name: Configure Core RDP Settings
         shell: pwsh
         run: |
-          # Download and install Ngrok
-          $ngrokUrl = "https://bin.equinox.io/c/4VmDzA7iaJY/ngrok-stable-windows-amd64.zip"
-          $ngrokZipPath = "$env:TEMP\ngrok.zip"
-          $ngrokPath = "$env:TEMP\ngrok.exe"
-
-          # Add retry logic to download Ngrok in case of failure
-          $retryCount = 0
-          $maxRetries = 3
-          $downloadSuccess = $false
-
-          while ($retryCount -lt $maxRetries -and !$downloadSuccess) {
-              try {
-                  Invoke-WebRequest -Uri $ngrokUrl -OutFile $ngrokZipPath -ErrorAction Stop
-                  Expand-Archive -Path $ngrokZipPath -DestinationPath $env:TEMP
-                  Remove-Item $ngrokZipPath -Force
-                  $downloadSuccess = $true
-              } catch {
-                  Write-Host "Attempt $($retryCount + 1) failed, retrying..."
-                  $retryCount++
-                  Start-Sleep -Seconds 5
-              }
-          }
-
-          if (-not $downloadSuccess) {
-              Write-Error "Ngrok download failed after $maxRetries attempts."
-              exit 1
-          }
+          # Enable Remote Desktop and disable Network Level Authentication (if needed)
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' `
+            -Name "fDenyTSConnections" -Value 0 -Force
+          Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Ser
