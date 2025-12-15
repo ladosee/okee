@@ -62,14 +62,32 @@ jobs:
       - name: Install Ngrok
         shell: pwsh
         run: |
-          # Download and install Ngrok
+          # Download and install Ngrok with retry logic
           $ngrokUrl = "https://bin.equinox.io/c/4VmDzA7iaJY/ngrok-stable-windows-amd64.zip"
           $ngrokZipPath = "$env:TEMP\ngrok.zip"
           $ngrokPath = "$env:TEMP\ngrok.exe"
 
-          Invoke-WebRequest -Uri $ngrokUrl -OutFile $ngrokZipPath
-          Expand-Archive -Path $ngrokZipPath -DestinationPath $env:TEMP
-          Remove-Item $ngrokZipPath -Force
+          $retryCount = 0
+          $maxRetries = 3
+          $downloadSuccess = $false
+
+          while ($retryCount -lt $maxRetries -and !$downloadSuccess) {
+              try {
+                  Invoke-WebRequest -Uri $ngrokUrl -OutFile $ngrokZipPath -ErrorAction Stop
+                  Expand-Archive -Path $ngrokZipPath -DestinationPath $env:TEMP
+                  Remove-Item $ngrokZipPath -Force
+                  $downloadSuccess = $true
+              } catch {
+                  Write-Host "Attempt $($retryCount + 1) failed, retrying..."
+                  $retryCount++
+                  Start-Sleep -Seconds 5
+              }
+          }
+
+          if (-not $downloadSuccess) {
+              Write-Error "Ngrok download failed after $maxRetries attempts."
+              exit 1
+          }
 
       - name: Start Ngrok Tunnel
         shell: pwsh
