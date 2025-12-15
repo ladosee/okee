@@ -19,8 +19,8 @@ jobs:
             -Name 'SecurityLayer' -Value 0 -Force
 
           # Allow incoming connection on port 3389 for RDP
-          netsh advfirewall firewall delete rule name="RDP-Ngrok"
-          netsh advfirewall firewall add rule name="RDP-Ngrok" `
+          netsh advfirewall firewall delete rule name="RDP-LocalTunnel"
+          netsh advfirewall firewall add rule name="RDP-LocalTunnel" `
             dir=in action=allow protocol=TCP localport=3389
 
           # Restart the Remote Desktop service to ensure changes take effect
@@ -59,62 +59,31 @@ jobs:
               exit 1
           }
 
-      - name: Install Ngrok
+      - name: Install LocalTunnel
         shell: pwsh
         run: |
-          # Download and install Ngrok with retry logic
-          $ngrokUrl = "https://bin.equinox.io/c/4VmDzA7iaJY/ngrok-stable-windows-amd64.zip"
-          $ngrokZipPath = "$env:TEMP\ngrok.zip"
-          $ngrokPath = "$env:TEMP\ngrok.exe"
+          # Install LocalTunnel via npm (Node.js should be installed)
+          npm install -g localtunnel
 
-          $retryCount = 0
-          $maxRetries = 3
-          $downloadSuccess = $false
-
-          while ($retryCount -lt $maxRetries -and !$downloadSuccess) {
-              try {
-                  Invoke-WebRequest -Uri $ngrokUrl -OutFile $ngrokZipPath -ErrorAction Stop
-                  Expand-Archive -Path $ngrokZipPath -DestinationPath $env:TEMP
-                  Remove-Item $ngrokZipPath -Force
-                  $downloadSuccess = $true
-              } catch {
-                  Write-Host "Attempt $($retryCount + 1) failed, retrying..."
-                  $retryCount++
-                  Start-Sleep -Seconds 5
-              }
-          }
-
-          if (-not $downloadSuccess) {
-              Write-Error "Ngrok download failed after $maxRetries attempts."
-              exit 1
-          }
-
-      - name: Start Ngrok Tunnel
+      - name: Start LocalTunnel
         shell: pwsh
         run: |
-          # Start Ngrok tunnel on port 3389 for RDP
-          Start-Process -FilePath "$env:TEMP\ngrok.exe" -ArgumentList "tcp", "3389" -NoNewWindow -Wait
+          # Start LocalTunnel on port 3389 for RDP
+          $ltUrl = (lt --port 3389) | Out-String
+          $ltUrl = $ltUrl.Split("`n")[0]  # Extract the URL from the output
 
-          # Wait for Ngrok to establish the connection and provide the forwarding URL
-          Start-Sleep -Seconds 10
-
-          # Extract the Ngrok URL
-          $ngrokURL = (Get-Content "$env:TEMP\ngrok.yml" | Select-String "tcp://").ToString().Split("`n")[0]
-          $ngrokIP = $ngrokURL.Split(":")[1].Trim()
-          $ngrokPort = $ngrokURL.Split(":")[2].Trim()
-
-          # Output Ngrok connection information
-          "Ngrok URL: $ngrokIP:$ngrokPort" >> $env:GITHUB_ENV
+          # Output the LocalTunnel URL
+          "LocalTunnel URL: $ltUrl" >> $env:GITHUB_ENV
 
       - name: Verify RDP Accessibility
         shell: pwsh
         run: |
-          Write-Host "Ngrok URL: $env:NGROK_URL"
+          Write-Host "LocalTunnel URL: $env:LT_URL"
 
-          $testResult = Test-NetConnection -ComputerName $env:NGROK_IP -Port $env:NGROK_PORT
+          $testResult = Test-NetConnection -ComputerName $env:LT_URL -Port 3389
           if ($testResult.TcpTestSucceeded) {
-              Write-Host "RDP connection via Ngrok is successful."
+              Write-Host "RDP connection via LocalTunnel is successful."
           } else {
-              Write-Error "RDP connection via Ngrok failed."
+              Write-Error "RDP connection via LocalTunnel failed."
               exit 1
           }
